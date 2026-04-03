@@ -1,12 +1,15 @@
 import nodemailer from "nodemailer";
 import QRCode from "qrcode";
+import dns from "node:dns";
+
+// Forzar resolución IPv4 globalmente (Railway no soporta IPv6)
+dns.setDefaultResultOrder("ipv4first");
 
 // Configura el transporter para Gmail (usando `.env`)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
   secure: false, // STARTTLS
-  family: 4,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
