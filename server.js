@@ -202,6 +202,9 @@ app.post("/mp/create-preference", async (req, res) => {
   }
 });
 
+// MercadoPago valida la URL con GET antes de enviar POST
+app.get("/mp/webhook", (req, res) => res.sendStatus(200));
+
 app.post("/mp/webhook", async (req, res) => {
   // Mercado Pago espera 200 rápido
   res.sendStatus(200);
