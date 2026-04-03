@@ -210,17 +210,22 @@ app.post("/mp/webhook", async (req, res) => {
   res.sendStatus(200);
 
   try {
+    console.log("[mp] webhook query:", req.query);
+    console.log("[mp] webhook body:", JSON.stringify(req.body));
+
     const topic =
       req.query?.type || req.query?.topic || req.body?.type || req.body?.topic;
     if (topic && topic !== "payment") return;
 
+    // Priorizar data.id (payment ID real) sobre id (notification ID)
     const paymentId =
+      req.body?.data?.id ||
       req.query?.["data.id"] ||
       req.query?.id ||
-      req.body?.data?.id ||
-      req.body?.id ||
       req.body?.resource;
     if (!paymentId) return;
+
+    console.log("[mp] paymentId extraído:", paymentId);
 
     const payment = new Payment(mpClient);
     const paymentInfo = await payment.get({ id: String(paymentId) });
