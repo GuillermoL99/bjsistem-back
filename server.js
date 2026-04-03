@@ -251,7 +251,7 @@ app.post("/mp/webhook", async (req, res) => {
       const reserved = await Order.findOneAndUpdate(
         { orderId, stockDeducted: { $ne: true } },
         { $set: { stockDeducted: true } },
-        { new: false }
+        { returnDocument: "before" }
       ).exec();
 
       if (reserved) {
@@ -311,26 +311,28 @@ app.post("/mp/webhook", async (req, res) => {
         attempts++;
       } while (attempts < 10);
 
-  const reserved = await Order.findOneAndUpdate(
+  const qrReserved = await Order.findOneAndUpdate(
     { orderId, qrSent: { $ne: true } },
-        { $set: { qrSent: true, ticketCode } },
-    { new: false }
+    { $set: { qrSent: true, ticketCode } },
+    { returnDocument: "before" }
   );
 
-  if (reserved) {
+  console.log("[mp] qrReserved:", qrReserved ? qrReserved.orderId : null, "email:", qrReserved?.buyer_email);
+
+  if (qrReserved) {
     try {
       await sendTicketQR(
-        reserved.buyer_email,
+        qrReserved.buyer_email,
         "¡Tu entrada para el evento!",
-        reserved.orderId,
+        qrReserved.orderId,
         {
-          title: reserved.title,
-          nombre: [reserved.buyer_firstName, reserved.buyer_lastName].filter(Boolean).join(" "),
-          dni: reserved.buyer_dni,
+          title: qrReserved.title,
+          nombre: [qrReserved.buyer_firstName, qrReserved.buyer_lastName].filter(Boolean).join(" "),
+          dni: qrReserved.buyer_dni,
               ticketCode,
         }
       );
-      console.log("[mp] QR enviado a:", reserved.buyer_email);
+      console.log("[mp] QR enviado a:", qrReserved.buyer_email);
     } catch (err) {
       console.error("[mp] Error enviando QR:", err);
     }
