@@ -1,15 +1,23 @@
 import nodemailer from "nodemailer";
 import QRCode from "qrcode";
-import dns from "node:dns";
+import { resolve4 } from "node:dns/promises";
 
-// Forzar resolución IPv4 globalmente (Railway no soporta IPv6)
-dns.setDefaultResultOrder("ipv4first");
+// Resolver smtp.gmail.com a IPv4 manualmente
+let gmailIp;
+try {
+  const ips = await resolve4("smtp.gmail.com");
+  gmailIp = ips[0];
+  console.log("[smtp] Resolved smtp.gmail.com ->", gmailIp);
+} catch (e) {
+  console.error("[smtp] DNS resolve failed, using hostname:", e.message);
+  gmailIp = "smtp.gmail.com";
+}
 
-// Configura el transporter para Gmail (usando `.env`)
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: gmailIp,
   port: 587,
-  secure: false, // STARTTLS
+  secure: false,
+  tls: { servername: "smtp.gmail.com" }, // SNI para que el certificado valide
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
