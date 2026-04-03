@@ -1,57 +1,26 @@
-import nodemailer from "nodemailer";
-import QRCode from "qrcode";
-import { resolve4 } from "node:dns/promises";
-
-// Resolver smtp.gmail.com a IPv4 manualmente
-let gmailIp;
-try {
-  const ips = await resolve4("smtp.gmail.com");
-  gmailIp = ips[0];
-  console.log("[smtp] Resolved smtp.gmail.com ->", gmailIp);
-} catch (e) {
-  console.error("[smtp] DNS resolve failed, using hostname:", e.message);
-  gmailIp = "smtp.gmail.com";
-}
-
-const transporter = nodemailer.createTransport({
-  host: gmailIp,
-  port: 587,
-  secure: false,
-  tls: { servername: "smtp.gmail.com" }, // SNI para que el certificado valide
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
 /**
- * Envía mail con QR como imagen adjunta y referencia CID.
+ * Envía mail de confirmación con código de respaldo via Brevo HTTP API.
  * @param {string} to - Email destino
  * @param {string} subject - Asunto del correo
- * @param {string} qrData - El contenido para el QR
- * @param {object} ticketData - Info de la compra 
+ * @param {string} qrData - El contenido para el QR (orderId)
+ * @param {object} ticketData - Info de la compra
  */
 export async function sendTicketQR(to, subject, qrData, ticketData) {
-  // 1. Generar QR como buffer (imagen PNG)
-  const qrBuffer = await QRCode.toBuffer(qrData);
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    console.error("[mail] BREVO_API_KEY no configurada, no se envía email");
+    return;
+  }
 
-  // 2. HTML del mail: referencia la imagen adjunta con src="cid:qrimage"
   const html = `
   <div style="font-family: 'Segoe UI', Arial, sans-serif; background: #f7f7fb; padding: 32px;">
     <div style="max-width: 480px; margin: auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 8px #0001; padding: 32px 28px;">
       <div style="text-align:center;">
-        <h1 style="color: #1864ab; margin-bottom: 12px;">¡Tu entrada está lista!</h1>
+        <h1 style="color: #1864ab; margin-bottom: 12px;">¡Gracias por tu compra!</h1>
         <p style="font-size:18px; margin-bottom: 24px">
-          Gracias por tu compra.<br>
-          Presentá este QR en la puerta del evento.<br>
+          Tu entrada fue confirmada.<br>
+          Descargá tu QR desde la página de confirmación.<br>
         </p>
-        <img 
-          src="cid:qrimage" 
-          alt="QR de tu entrada"
-          width="320" 
-          height="320"
-          style="display:block; margin: 0 auto 20px auto; border-radius:16px; border:4px solid #eee; box-shadow:0 2px 6px #0003;" 
-        />
         ${ticketData.ticketCode ? `
         <div style="margin: 0 auto 20px; display:inline-block; background:#f0f4ff; border:2px dashed #1864ab; border-radius:12px; padding:14px 28px;">
           <div style="font-size:13px; color:#555; margin-bottom:6px; letter-spacing:.05em; text-transform:uppercase;">Código de respaldo</div>
@@ -66,24 +35,32 @@ export async function sendTicketQR(to, subject, qrData, ticketData) {
       </div>
       <div style="margin-top: 32px; font-size:14px; color:#888; text-align:center;">
         ¿Tenés dudas? Respondé a este correo.<br>
-        <span style="font-size:11px">No compartas tu QR con otros.</span>
+        <span style="font-size:11px">No compartas tu código con otros.</span>
       </div>
     </div>
   </div>
 `;
 
-  // 3. Enviar mail con adjunto
-  await transporter.sendMail({
-    from: `"Entradas" <${process.env.SMTP_USER}>`,
-    to,
-    subject,
-    html,
-    attachments: [
-      {
-        filename: "qrcode.png",
-        content: qrBuffer,
-        cid: "qrimage", // Debe coincidir con src="cid:qrimage"
-      },
-    ],
+  const senderEmail = process.env.BREVO_SENDER || process.env.SMTP_USER;
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: "Entradas", email: senderEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
   });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Brevo error ${res.status}: ${err}`);
+  }
+
+  console.log("[mail] Email enviado via Brevo a:", to);
 }
