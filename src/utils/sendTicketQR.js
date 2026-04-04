@@ -12,9 +12,6 @@ export async function sendTicketQR(to, subject, qrData, ticketData) {
     return;
   }
 
-  const BASE_URL = (process.env.BASE_URL || "").trim().replace(/\/+$/, "");
-  const qrImageUrl = `${BASE_URL}/qr/${encodeURIComponent(qrData)}`;
-
   const html = `
   <div style="font-family: 'Segoe UI', Arial, sans-serif; background: #f7f7fb; padding: 32px;">
     <div style="max-width: 480px; margin: auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 8px #0001; padding: 32px 28px;">
@@ -23,15 +20,11 @@ export async function sendTicketQR(to, subject, qrData, ticketData) {
         <p style="font-size:18px; margin-bottom: 24px">
           Tu entrada fue confirmada.
         </p>
-        <div style="margin: 20px 0; text-align:center;">
-          <p style="font-size:14px; color:#555; margin-bottom:8px;">Presentá este QR en la puerta del evento:</p>
-          <img src="${qrImageUrl}" alt="QR de tu entrada" width="240" height="240" style="width:240px; height:240px; border-radius:12px; border:3px solid #eee;" />
-        </div>
         ${ticketData.ticketCode ? `
         <div style="margin: 20px auto; display:inline-block; background:#f0f4ff; border:2px dashed #1864ab; border-radius:12px; padding:14px 28px;">
           <div style="font-size:13px; color:#555; margin-bottom:6px; letter-spacing:.05em; text-transform:uppercase;">Código de respaldo</div>
           <div style="font-size:36px; font-weight:900; letter-spacing:.25em; color:#1864ab;">${ticketData.ticketCode}</div>
-          <div style="font-size:12px; color:#888; margin-top:6px;">Usalo si el QR no puede escanearse</div>
+          <div style="font-size:12px; color:#888; margin-top:6px;">Usá este código en la puerta del evento</div>
         </div>` : ""}
       </div>
       <div style="margin: 24px 0 0 0; font-size:16px;">
