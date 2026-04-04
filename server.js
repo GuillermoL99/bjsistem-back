@@ -16,6 +16,7 @@ import Order from "./src/models/Orders.js";
 import TicketType from "./src/models/TicketType.js";
 import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
+import adminMetrics from "./src/routes/adminMetrics.js";
 
 const app = express();
 
@@ -33,6 +34,7 @@ app.use("/admin/tickets", adminTicketsRoutes);
 app.use("/tickets", publicTicketsRoutes);
 app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
+app.use("/admin", adminMetrics);
 
 app.get("/orders/:orderId", async (req, res) => {
   const { orderId } = req.params;
