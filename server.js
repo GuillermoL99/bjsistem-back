@@ -95,6 +95,8 @@ app.get("/orders/:orderId", async (req, res) => {
     ticketCode: order.ticketCode || null,
     scanned: order.scanned || false,
     buyer_firstName: order.buyer_firstName,
+    init_point: order.init_point || null,
+    sandbox_init_point: order.sandbox_init_point || null,
   });
 });
 
