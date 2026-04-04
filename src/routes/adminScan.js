@@ -17,10 +17,13 @@ router.post("/scan", requireAuth(), async (req, res) => {
       return res.status(400).json({ ok: false, code: "invalid_input" });
     }
 
+    const safeOrderId = String(orderId || "").trim().slice(0, 100);
+    const safeTicketCode = String(ticketCode || "").trim().slice(0, 20);
+
     // Buscar por orderId o por ticketCode
-    const query = ticketCode
-      ? { ticketCode: String(ticketCode).trim() }
-      : { orderId: String(orderId).trim() };
+    const query = safeTicketCode
+      ? { ticketCode: safeTicketCode }
+      : { orderId: safeOrderId };
 
     const order = await Order.findOne(query);
 
@@ -61,7 +64,7 @@ router.post("/scan", requireAuth(), async (req, res) => {
       },
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, code: "server_error", error: String(e?.message || e) });
+    return res.status(500).json({ ok: false, code: "server_error" });
   }
 });
 

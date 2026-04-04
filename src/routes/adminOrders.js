@@ -1,9 +1,17 @@
 // back/src/routes/adminOrders.js
 import express from "express";
+import mongoose from "mongoose";
 import Order from "../models/Orders.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+
+// Escapar caracteres especiales de regex para prevenir NoSQL injection
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const ALLOWED_STATUSES = ["created", "pending", "approved", "rejected", "refunded", "cancelled"];
 
 /**
  * GET /admin/orders?q=&status=
@@ -15,9 +23,14 @@ router.get("/orders", requireAuth(), requireRole("SUPER_ADMIN"), async (req, res
 
     const query = {};
 
-    if (status) query.status = status;
+    if (status) {
+      if (!ALLOWED_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "invalid_status" });
+      }
+      query.status = status;
+    }
 
-    const qq = String(q || "").trim();
+    const qq = escapeRegex(String(q || "").trim()).slice(0, 200);
     if (qq) {
       query.$or = [
         { orderId: { $regex: qq, $options: "i" } },
@@ -32,7 +45,8 @@ router.get("/orders", requireAuth(), requireRole("SUPER_ADMIN"), async (req, res
 
     return res.json({ orders });
   } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
+    console.error("[adminOrders] list error:", e);
+    return res.status(500).json({ error: "server_error" });
   }
 });
 
@@ -46,7 +60,8 @@ router.get("/orders/:orderId", requireAuth(), requireRole("SUPER_ADMIN"), async 
 
     return res.json({ order });
   } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
+    console.error("[adminOrders] detail error:", e);
+    return res.status(500).json({ error: "server_error" });
   }
 });
 
@@ -62,9 +77,14 @@ router.get("/orders.csv", requireAuth(), requireRole("SUPER_ADMIN"), async (req,
     const { q = "", status = "" } = req.query;
 
     const query = {};
-    if (status) query.status = status;
+    if (status) {
+      if (!ALLOWED_STATUSES.includes(status)) {
+        return res.status(400).json({ error: "invalid_status" });
+      }
+      query.status = status;
+    }
 
-    const qq = String(q || "").trim();
+    const qq = escapeRegex(String(q || "").trim()).slice(0, 200);
     if (qq) {
       query.$or = [
         { orderId: { $regex: qq, $options: "i" } },
@@ -119,7 +139,8 @@ router.get("/orders.csv", requireAuth(), requireRole("SUPER_ADMIN"), async (req,
     res.setHeader("Content-Disposition", `attachment; filename="orders.csv"`);
     return res.status(200).send(csv);
   } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
+    console.error("[adminOrders] csv error:", e);
+    return res.status(500).json({ error: "server_error" });
   }
 });
 
@@ -136,10 +157,15 @@ router.delete("/orders", requireAuth(), requireRole("SUPER_ADMIN"), async (req, 
       return res.status(400).json({ error: "ids_required" });
     }
 
+    if (ids.length > 500 || !ids.every(id => mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ error: "invalid_ids" });
+    }
+
     const result = await Order.deleteMany({ _id: { $in: ids } });
     return res.json({ deleted: result.deletedCount });
   } catch (e) {
-    return res.status(500).json({ error: String(e?.message || e) });
+    console.error("[adminOrders] delete error:", e);
+    return res.status(500).json({ error: "server_error" });
   }
 });
 

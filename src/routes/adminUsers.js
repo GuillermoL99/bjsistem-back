@@ -33,6 +33,12 @@ router.post("/", async (req, res) => {
 
     if (!username || !password || !role) return res.status(400).json({ error: "missing_fields" });
     if (!["SUPER_ADMIN", "STAFF"].includes(role)) return res.status(400).json({ error: "invalid_role" });
+    if (username.length > 50) return res.status(400).json({ error: "username_too_long" });
+
+    // Password: mínimo 8 chars, 1 mayúscula, 1 número
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: "weak_password" });
+    }
 
     const exists = await User.findOne({ username }).lean();
     if (exists) return res.status(409).json({ error: "username_taken" });

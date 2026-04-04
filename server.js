@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
@@ -9,7 +12,7 @@ import authRoutes from "./src/routes/auth.js";
 import adminUsersRoutes from "./src/routes/adminUsers.js";
 import adminTicketsRoutes from "./src/routes/adminTickets.js";
 import publicTicketsRoutes from "./src/routes/publicTickets.js";
-import { sendTicketQR } from "./src/utils/sendTicketQR.js"; // <-- AJUSTADO path
+import { sendTicketQR } from "./src/utils/sendTicketQR.js";
 
 import User from "./src/models/User.js";
 import Order from "./src/models/Orders.js";
@@ -20,13 +23,50 @@ import adminMetrics from "./src/routes/adminMetrics.js";
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// --- Security headers ---
+app.use(helmet());
+
+// --- CORS restringido ---
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+].filter(Boolean).map(u => u.replace(/\/+$/, ""));
+
+app.use(cors({
+  origin(origin, cb) {
+    // Permitir requests sin origin (mobile apps, curl, webhooks MP)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error("CORS not allowed"));
+  },
+  credentials: true,
+}));
+
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (req, res) => res.send("OK backend running"));
 app.get("/health", (req, res) =>
   res.json({ ok: true, service: "backend", date: new Date().toISOString() })
 );
+
+// --- Rate limit para login (anti brute-force) ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 15, // máx 15 intentos por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" },
+});
+app.use("/auth/login", loginLimiter);
+
+// --- Rate limit general para checkout ---
+const checkoutLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" },
+});
 
 app.use("/auth", authRoutes);
 app.use("/admin/users", adminUsersRoutes);
@@ -36,11 +76,26 @@ app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
 
+// Endpoint público: solo devuelve lo mínimo necesario para mostrar resultado
 app.get("/orders/:orderId", async (req, res) => {
   const { orderId } = req.params;
+  // Validar formato orderId
+  if (!/^ORDER_\d+$/.test(orderId)) {
+    return res.status(400).json({ error: "invalid_orderId" });
+  }
   const order = await Order.findOne({ orderId }).lean();
-  if (!order) return res.status(404).json({ error: "order_not_found", orderId });
-  res.json(order);
+  if (!order) return res.status(404).json({ error: "order_not_found" });
+  // Solo exponer campos seguros (sin PII sensible)
+  res.json({
+    orderId: order.orderId,
+    title: order.title,
+    quantity: order.quantity,
+    unit_price: order.unit_price,
+    status: order.status,
+    ticketCode: order.ticketCode || null,
+    scanned: order.scanned || false,
+    buyer_firstName: order.buyer_firstName,
+  });
 });
 
 function buildWebhookUrl() {
@@ -54,30 +109,45 @@ const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
-app.post("/checkout", async (req, res) => {
+app.post("/checkout", checkoutLimiter, async (req, res) => {
   try {
     let { ticketId, quantity = 1, buyer_email, buyer_dni, buyer_birthdate,  buyer_firstName, buyer_lastName } = req.body || {};
     const qty = Number(quantity);
 
     // Validaciones básicas
     if (!ticketId) return res.status(400).json({ error: "missing_ticketId" });
+    if (!mongoose.Types.ObjectId.isValid(ticketId)) {
+      return res.status(400).json({ error: "invalid_ticketId" });
+    }
     if (!Number.isInteger(qty) || qty < 1 || qty > 3) {
       return res.status(400).json({ error: "invalid_quantity" });
     }
 
-    buyer_email = String(buyer_email || "").trim();
+    buyer_email = String(buyer_email || "").trim().toLowerCase();
     buyer_dni = String(buyer_dni || "").trim();
     buyer_birthdate = String(buyer_birthdate || "").trim();
     buyer_firstName = String(buyer_firstName || "").trim();
     buyer_lastName = String(buyer_lastName || "").trim();
 
-    if (!buyer_email || !buyer_email.includes("@")) {
+    // Validar longitudes máximas
+    if (buyer_firstName.length > 80 || buyer_lastName.length > 80) {
+      return res.status(400).json({ error: "name_too_long" });
+    }
+
+    // Email: regex más robusto
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!buyer_email || !emailRe.test(buyer_email) || buyer_email.length > 254) {
       return res.status(400).json({ error: "invalid_email" });
     }
     if (!/^[0-9]{7,9}$/.test(buyer_dni)) {
       return res.status(400).json({ error: "invalid_dni" });
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(buyer_birthdate)) {
+      return res.status(400).json({ error: "invalid_birthdate" });
+    }
+    // Validar que la fecha sea real
+    const bd = new Date(buyer_birthdate);
+    if (isNaN(bd.getTime()) || bd > new Date()) {
       return res.status(400).json({ error: "invalid_birthdate" });
     }
     if (!buyer_firstName) return res.status(400).json({ error: "invalid_firstName" });
@@ -212,6 +282,32 @@ app.post("/mp/webhook", async (req, res) => {
   res.sendStatus(200);
 
   try {
+    // --- Verificación de firma del webhook (HMAC-SHA256) ---
+    const mpWebhookSecret = process.env.MP_WEBHOOK_SECRET;
+    if (mpWebhookSecret) {
+      const xSignature = req.headers["x-signature"] || "";
+      const xRequestId = req.headers["x-request-id"] || "";
+      const dataId = req.query?.["data.id"] || "";
+
+      // Parsear ts y v1 del header x-signature
+      const parts = Object.fromEntries(
+        xSignature.split(",").map(p => {
+          const [k, ...v] = p.split("=");
+          return [k.trim(), v.join("=").trim()];
+        })
+      );
+      const ts = parts.ts;
+      const v1 = parts.v1;
+
+      if (ts && v1) {
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+        const hmac = crypto.createHmac("sha256", mpWebhookSecret).update(manifest).digest("hex");
+        if (hmac !== v1) {
+          console.warn("[mp] webhook signature INVALID – ignoring");
+          return;
+        }
+      }
+    }
     console.log("[mp] webhook query:", req.query);
     console.log("[mp] webhook body:", JSON.stringify(req.body));
 
