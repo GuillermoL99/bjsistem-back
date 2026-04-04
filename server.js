@@ -21,6 +21,8 @@ import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
 import adminMetrics from "./src/routes/adminMetrics.js";
 
+import QRCode from "qrcode";
+
 const app = express();
 
 // --- Security headers ---
@@ -75,6 +77,22 @@ app.use("/tickets", publicTicketsRoutes);
 app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
+
+// Endpoint público: genera y sirve el QR como imagen PNG
+app.get("/qr/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+  if (!/^ORDER_\d+$/.test(orderId)) {
+    return res.status(400).send("invalid orderId");
+  }
+  try {
+    const buffer = await QRCode.toBuffer(orderId, { width: 320, margin: 2 });
+    res.set({ "Content-Type": "image/png", "Cache-Control": "public, max-age=31536000" });
+    res.send(buffer);
+  } catch (e) {
+    console.error("[qr] error:", e);
+    res.status(500).send("error generating QR");
+  }
+});
 
 // Endpoint público: solo devuelve lo mínimo necesario para mostrar resultado
 app.get("/orders/:orderId", async (req, res) => {
