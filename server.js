@@ -20,6 +20,7 @@ import TicketType from "./src/models/TicketType.js";
 import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
 import adminMetrics from "./src/routes/adminMetrics.js";
+import adminList from "./src/routes/adminList.js";
 
 import QRCode from "qrcode";
 
@@ -77,6 +78,7 @@ app.use("/tickets", publicTicketsRoutes);
 app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
+app.use("/admin/list", adminList);
 
 // Endpoint público: genera y sirve el QR como imagen PNG
 app.get("/qr/:orderId", async (req, res) => {
