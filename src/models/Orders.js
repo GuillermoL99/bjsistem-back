@@ -32,6 +32,7 @@ const orderSchema = new mongoose.Schema(
         "refunded",
         "cancelled",
         "unknown",
+        "manual",
       ],
       default: "created",
     },
