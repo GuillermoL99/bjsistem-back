@@ -14,6 +14,7 @@ router.get("/", async (req, res) => {
     const people = await GuestPerson.find({ listId: { $in: listIds } }).lean();
     const listsWithPeople = lists.map(list => ({
       ...list,
+      eventDate: list.eventDate instanceof Date ? list.eventDate.toISOString().slice(0, 10) : (typeof list.eventDate === "string" ? list.eventDate.slice(0, 10) : null),
       people: people.filter(p => String(p.listId) === String(list._id)),
     }));
     res.json({ lists: listsWithPeople });
