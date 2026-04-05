@@ -14,6 +14,7 @@ router.get("/", async (req, res) => {
         name: t.name,
         priceARS: t.priceARS,
         stock: t.stock,
+        eventDate: t.eventDate || null,
         active: t.active,
         createdAt: t.createdAt,
       })),
@@ -26,7 +27,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    let { name, priceARS, stock } = req.body || {};
+    let { name, priceARS, stock, eventDate } = req.body || {};
     name = String(name || "").trim();
 
     const price = Number(priceARS);
@@ -36,7 +37,10 @@ router.post("/", async (req, res) => {
     if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: "invalid_price" });
     if (!Number.isInteger(st) || st < 0) return res.status(400).json({ error: "invalid_stock" });
 
-    const created = await TicketType.create({ name, priceARS: price, stock: st, active: true });
+    const doc = { name, priceARS: price, stock: st, active: true };
+    if (eventDate) doc.eventDate = new Date(eventDate);
+
+    const created = await TicketType.create(doc);
     res.status(201).json({ id: String(created._id) });
   } catch (e) {
     console.error("[adminTickets] create error:", e);
@@ -47,7 +51,7 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, priceARS, stock, active } = req.body || {};
+    const { name, priceARS, stock, active, eventDate } = req.body || {};
 
     const update = {};
 
@@ -74,6 +78,10 @@ router.patch("/:id", async (req, res) => {
       update.active = active;
     }
 
+    if (eventDate !== undefined) {
+      update.eventDate = eventDate ? new Date(eventDate) : null;
+    }
+
     const exists = await TicketType.findById(id).lean();
     if (!exists) return res.status(404).json({ error: "ticket_not_found" });
 
@@ -81,6 +89,20 @@ router.patch("/:id", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("[adminTickets] patch error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exists = await TicketType.findById(id).lean();
+    if (!exists) return res.status(404).json({ error: "ticket_not_found" });
+
+    await TicketType.deleteOne({ _id: id }).exec();
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[adminTickets] delete error:", e);
     res.status(500).json({ error: "server_error" });
   }
 });

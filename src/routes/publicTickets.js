@@ -12,6 +12,7 @@ router.get("/", async (req, res) => {
         name: t.name,
         priceARS: t.priceARS,
         stock: t.stock,
+        eventDate: t.eventDate || null,
       })),
     });
   } catch (e) {
