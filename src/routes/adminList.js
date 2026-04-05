@@ -37,6 +37,27 @@ router.get("/", async (req, res) => {
       };
     });
 
+    // Grupo "Lista Free": manuales sin ticketId
+    const freePeople = orders
+      .filter((o) => !o.ticketId && o.status === "manual")
+      .map((o) => ({
+        orderId: o.orderId,
+        firstName: o.buyer_firstName || "",
+        lastName: o.buyer_lastName || "",
+        dni: o.buyer_dni || "",
+        quantity: o.quantity ?? 1,
+        scanned: !!o.scanned,
+        manual: true,
+      }));
+
+    grouped.push({
+      ticketId: "free",
+      ticketName: "Lista Free",
+      eventDate: null,
+      active: true,
+      people: freePeople,
+    });
+
     res.json({ events: grouped });
   } catch (e) {
     console.error("[adminList] error:", e);
@@ -62,7 +83,7 @@ router.patch("/:orderId", async (req, res) => {
   }
 });
 
-// POST /admin/list — agregar persona manual a un evento
+// POST /admin/list — agregar persona manual a un evento o a Lista Free
 router.post("/", async (req, res) => {
   try {
     let { ticketId, firstName, lastName, dni } = req.body || {};
@@ -70,26 +91,30 @@ router.post("/", async (req, res) => {
     lastName = String(lastName || "").trim();
     dni = String(dni || "").trim();
 
-    if (!ticketId) return res.status(400).json({ error: "missing_ticketId" });
     if (!firstName) return res.status(400).json({ error: "missing_firstName" });
     if (!lastName) return res.status(400).json({ error: "missing_lastName" });
     if (!dni) return res.status(400).json({ error: "missing_dni" });
 
-    const ticket = await TicketType.findById(ticketId).lean();
-    if (!ticket) return res.status(404).json({ error: "ticket_not_found" });
-
     const orderId = `MANUAL_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-
-    await Order.create({
+    const doc = {
       orderId,
-      ticketId: ticket._id,
-      title: ticket.name,
       buyer_firstName: firstName,
       buyer_lastName: lastName,
       buyer_dni: dni,
       quantity: 1,
       status: "manual",
-    });
+    };
+
+    if (ticketId && ticketId !== "free") {
+      const ticket = await TicketType.findById(ticketId).lean();
+      if (!ticket) return res.status(404).json({ error: "ticket_not_found" });
+      doc.ticketId = ticket._id;
+      doc.title = ticket.name;
+    } else {
+      doc.title = "Lista Free";
+    }
+
+    await Order.create(doc);
 
     res.status(201).json({ ok: true, orderId });
   } catch (e) {
