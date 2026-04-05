@@ -1,66 +1,70 @@
 import { Router } from "express";
 import Order from "../models/Orders.js";
 import TicketType from "../models/TicketType.js";
-import { requireAuth } from "../middleware/auth.js";
+import ListSettings from "../models/ListSettings.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = Router();
 router.use(requireAuth());
 
-// GET /admin/list — devuelve entradas aprobadas + manuales agrupadas por evento
+// helper — obtener o crear settings
+async function getSettings() {
+  let s = await ListSettings.findOne({ key: "free_list" });
+  if (!s) s = await ListSettings.create({ key: "free_list" });
+  return s;
+}
+
+// GET /admin/list — devuelve solo Lista Free (manuales sin ticketId)
 router.get("/", async (req, res) => {
   try {
-    const tickets = await TicketType.find().sort({ eventDate: -1, createdAt: -1 }).lean();
+    const [orders, settings] = await Promise.all([
+      Order.find({ status: "manual", ticketId: null })
+        .select("buyer_firstName buyer_lastName buyer_dni orderId scanned scannedAt addedBy")
+        .lean(),
+      getSettings(),
+    ]);
 
-    const orders = await Order.find({ status: { $in: ["approved", "manual"] } })
-      .select("ticketId buyer_firstName buyer_lastName buyer_dni quantity title orderId scanned scannedAt status")
-      .lean();
+    const freePeople = orders.map((o) => ({
+      orderId: o.orderId,
+      firstName: o.buyer_firstName || "",
+      lastName: o.buyer_lastName || "",
+      dni: o.buyer_dni || "",
+      scanned: !!o.scanned,
+      manual: true,
+      addedBy: o.addedBy || null,
+    }));
 
-    const grouped = tickets.map((t) => {
-      const people = orders
-        .filter((o) => o.ticketId && String(o.ticketId) === String(t._id))
-        .map((o) => ({
-          orderId: o.orderId,
-          firstName: o.buyer_firstName || "",
-          lastName: o.buyer_lastName || "",
-          dni: o.buyer_dni || "",
-          quantity: o.quantity ?? 1,
-          scanned: !!o.scanned,
-          manual: o.status === "manual",
-        }));
-
-      return {
-        ticketId: String(t._id),
-        ticketName: t.name,
-        eventDate: t.eventDate || null,
-        active: t.active,
-        people,
-      };
-    });
-
-    // Grupo "Lista Free": manuales sin ticketId
-    const freePeople = orders
-      .filter((o) => !o.ticketId && o.status === "manual")
-      .map((o) => ({
-        orderId: o.orderId,
-        firstName: o.buyer_firstName || "",
-        lastName: o.buyer_lastName || "",
-        dni: o.buyer_dni || "",
-        quantity: o.quantity ?? 1,
-        scanned: !!o.scanned,
-        manual: true,
-      }));
-
-    grouped.push({
-      ticketId: "free",
-      ticketName: "Lista Free",
-      eventDate: null,
-      active: true,
+    res.json({
+      eventDate: settings.eventDate || null,
       people: freePeople,
     });
-
-    res.json({ events: grouped });
   } catch (e) {
     console.error("[adminList] error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// PUT /admin/list/date — establecer fecha del evento de la lista
+router.put("/date", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const { eventDate } = req.body || {};
+    const s = await getSettings();
+    s.eventDate = eventDate || null;
+    await s.save();
+    res.json({ ok: true, eventDate: s.eventDate });
+  } catch (e) {
+    console.error("[adminList] set date error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// DELETE /admin/list/all — borrar toda la lista free
+router.delete("/all", requireRole("SUPER_ADMIN"), async (req, res) => {
+  try {
+    const result = await Order.deleteMany({ status: "manual", ticketId: null });
+    res.json({ ok: true, deleted: result.deletedCount });
+  } catch (e) {
+    console.error("[adminList] delete all error:", e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -95,6 +99,16 @@ router.post("/", async (req, res) => {
     if (!lastName) return res.status(400).json({ error: "missing_lastName" });
     if (!dni) return res.status(400).json({ error: "missing_dni" });
 
+    // Verificar duplicado por DNI en el mismo evento/lista
+    const dupeQuery = { buyer_dni: dni, status: { $in: ["approved", "manual"] } };
+    if (ticketId && ticketId !== "free") {
+      dupeQuery.ticketId = ticketId;
+    } else {
+      dupeQuery.ticketId = null;
+    }
+    const exists = await Order.findOne(dupeQuery).lean();
+    if (exists) return res.status(409).json({ error: "duplicate_dni" });
+
     const orderId = `MANUAL_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const doc = {
       orderId,
@@ -113,6 +127,8 @@ router.post("/", async (req, res) => {
     } else {
       doc.title = "Lista Free";
     }
+
+    doc.addedBy = req.user?.username || null;
 
     await Order.create(doc);
 

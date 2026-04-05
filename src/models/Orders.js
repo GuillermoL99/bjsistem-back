@@ -55,6 +55,8 @@ const orderSchema = new mongoose.Schema(
 
     scanned: { type: Boolean, default: false },
     scannedAt: { type: Date, default: null },
+
+    addedBy: { type: String, default: null },
   },
   { timestamps: true }
 );
