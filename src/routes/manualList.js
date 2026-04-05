@@ -13,6 +13,12 @@ router.post("/manual", requireAuth(), requireRole(["SUPER_ADMIN", "STAFF"]), asy
       return res.status(400).json({ error: "missing_fields" });
     }
 
+    // Validar que no exista ya una persona con ese DNI y status manual
+    const exists = await Order.findOne({ buyer_dni: dni, status: "manual" });
+    if (exists) {
+      return res.status(409).json({ error: "dni_exists" });
+    }
+
     // Crear orden manual (sin pago)
     const order = await Order.create({
       orderId: uuidv4(),
