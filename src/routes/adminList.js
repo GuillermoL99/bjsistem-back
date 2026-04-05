@@ -34,8 +34,14 @@ router.get("/", async (req, res) => {
       addedBy: o.addedBy || null,
     }));
 
+    let eventDate = null;
+    if (settings.eventDate instanceof Date) {
+      eventDate = settings.eventDate.toISOString().slice(0, 10);
+    } else if (typeof settings.eventDate === "string" && settings.eventDate.length >= 10) {
+      eventDate = settings.eventDate.slice(0, 10);
+    }
     res.json({
-      eventDate: settings.eventDate || null,
+      eventDate,
       people: freePeople,
     });
   } catch (e) {
