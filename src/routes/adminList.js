@@ -45,6 +45,7 @@ router.get("/", async (req, res) => {
 });
 
 
+
 // POST /admin/list — crear lista (setea fecha)
 router.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
   try {
@@ -56,6 +57,49 @@ router.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
     res.json({ ok: true, eventDate: s.eventDate });
   } catch (e) {
     console.error("[adminList] create list error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// POST /admin/list/person — agregar persona manual a la lista (STAFF o SUPER_ADMIN)
+router.post("/person", requireRole(["STAFF", "SUPER_ADMIN"]), async (req, res) => {
+  try {
+    let { ticketId, firstName, lastName, dni } = req.body || {};
+    firstName = String(firstName || "").trim();
+    lastName = String(lastName || "").trim();
+    dni = String(dni || "").trim();
+
+    if (!firstName) return res.status(400).json({ error: "missing_firstName" });
+    if (!lastName) return res.status(400).json({ error: "missing_lastName" });
+    if (!dni) return res.status(400).json({ error: "missing_dni" });
+
+    // Verificar duplicado por DNI en el mismo evento/lista
+    const dupeQuery = { buyer_dni: dni, status: { $in: ["approved", "manual"] } };
+    if (ticketId && ticketId !== "free") {
+      dupeQuery.ticketId = ticketId;
+    } else {
+      dupeQuery.ticketId = null;
+    }
+    const exists = await Order.findOne(dupeQuery).lean();
+    if (exists) return res.status(409).json({ error: "duplicate_dni" });
+
+    const orderId = `MANUAL_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const doc = {
+      orderId,
+      buyer_firstName: firstName,
+      buyer_lastName: lastName,
+      buyer_dni: dni,
+      quantity: 1,
+      status: "manual",
+      title: "Lista Free",
+      addedBy: req.user?.username || null,
+    };
+
+    await Order.create(doc);
+
+    res.status(201).json({ ok: true, orderId });
+  } catch (e) {
+    console.error("[adminList] add error:", e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -92,57 +136,6 @@ router.patch("/:orderId", async (req, res) => {
   }
 });
 
-// POST /admin/list — agregar persona manual a un evento o a Lista Free
-router.post("/", async (req, res) => {
-  try {
-    let { ticketId, firstName, lastName, dni } = req.body || {};
-    firstName = String(firstName || "").trim();
-    lastName = String(lastName || "").trim();
-    dni = String(dni || "").trim();
-
-    if (!firstName) return res.status(400).json({ error: "missing_firstName" });
-    if (!lastName) return res.status(400).json({ error: "missing_lastName" });
-    if (!dni) return res.status(400).json({ error: "missing_dni" });
-
-    // Verificar duplicado por DNI en el mismo evento/lista
-    const dupeQuery = { buyer_dni: dni, status: { $in: ["approved", "manual"] } };
-    if (ticketId && ticketId !== "free") {
-      dupeQuery.ticketId = ticketId;
-    } else {
-      dupeQuery.ticketId = null;
-    }
-    const exists = await Order.findOne(dupeQuery).lean();
-    if (exists) return res.status(409).json({ error: "duplicate_dni" });
-
-    const orderId = `MANUAL_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const doc = {
-      orderId,
-      buyer_firstName: firstName,
-      buyer_lastName: lastName,
-      buyer_dni: dni,
-      quantity: 1,
-      status: "manual",
-    };
-
-    if (ticketId && ticketId !== "free") {
-      const ticket = await TicketType.findById(ticketId).lean();
-      if (!ticket) return res.status(404).json({ error: "ticket_not_found" });
-      doc.ticketId = ticket._id;
-      doc.title = ticket.name;
-    } else {
-      doc.title = "Lista Free";
-    }
-
-    doc.addedBy = req.user?.username || null;
-
-    await Order.create(doc);
-
-    res.status(201).json({ ok: true, orderId });
-  } catch (e) {
-    console.error("[adminList] add error:", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
 
 // DELETE /admin/list/:orderId — eliminar persona manual de la lista
 router.delete("/:orderId", async (req, res) => {
