@@ -17,7 +17,7 @@ const ALLOWED_STATUSES = ["created", "pending", "approved", "rejected", "refunde
  * GET /admin/orders?q=&status=
  * SUPER_ADMIN only
  */
-router.get("/orders", requireAuth(), requireRole("SUPER_ADMIN"), async (req, res) => {
+router.get("/orders", requireAuth(), requireRole(["SUPER_ADMIN", "STAFF"]), async (req, res) => {
   try {
     const { q = "", status = "" } = req.query;
 
