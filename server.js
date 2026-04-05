@@ -15,8 +15,8 @@ import publicTicketsRoutes from "./src/routes/publicTickets.js";
 import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
 import adminMetrics from "./src/routes/adminMetrics.js";
-import adminList from "./src/routes/adminList.js";
-import adminGuestList from "./src/routes/adminGuestList.js";
+// import adminList from "./src/routes/adminList.js";
+// import adminGuestList from "./src/routes/adminGuestList.js";
 
 import User from "./src/models/User.js";
 import Order from "./src/models/Orders.js";
@@ -77,9 +77,9 @@ app.use("/tickets", publicTicketsRoutes);
 app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
-app.use("/admin/list", adminList);
-app.use("/admin/guest-list", adminGuestList);
-app.use("/admin/guest-lists", adminGuestList);
+// app.use("/admin/list", adminList);
+// app.use("/admin/guest-list", adminGuestList);
+// app.use("/admin/guest-lists", adminGuestList);
 
 // Endpoint público: genera y sirve el QR como imagen PNG
 app.get("/qr/:orderId", async (req, res) => {
