@@ -16,6 +16,7 @@ import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
 import adminMetrics from "./src/routes/adminMetrics.js";
 import manualList from "./src/routes/manualList.js";
+import manualMark from "./src/routes/manualMark.js";
 
 import User from "./src/models/User.js";
 import Order from "./src/models/Orders.js";
@@ -77,6 +78,7 @@ app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
 app.use("/admin/lista", manualList);
+app.use("/admin/lista", manualMark);
 
 // Endpoint público: genera y sirve el QR como imagen PNG
 app.get("/qr/:orderId", async (req, res) => {
