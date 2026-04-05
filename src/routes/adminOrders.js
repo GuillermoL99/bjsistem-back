@@ -11,7 +11,7 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-const ALLOWED_STATUSES = ["created", "pending", "approved", "rejected", "refunded", "cancelled"];
+const ALLOWED_STATUSES = ["created", "pending", "approved", "rejected", "refunded", "cancelled", "manual"];
 
 /**
  * GET /admin/orders?q=&status=
