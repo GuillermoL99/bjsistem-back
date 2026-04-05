@@ -36,4 +36,31 @@ router.post("/manual", requireAuth(), requireRole(["SUPER_ADMIN", "STAFF"]), asy
   }
 });
 
+
+// Borrar una persona de la lista manual por ID
+router.delete("/:id", requireAuth(), requireRole(["SUPER_ADMIN", "STAFF"]), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Order.findOneAndDelete({ _id: id, status: "manual" });
+    if (!deleted) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[manual delete one] error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Borrar todas las personas de la lista manual
+router.delete("/", requireAuth(), requireRole(["SUPER_ADMIN", "STAFF"]), async (req, res) => {
+  try {
+    const result = await Order.deleteMany({ status: "manual" });
+    res.json({ ok: true, deletedCount: result.deletedCount });
+  } catch (e) {
+    console.error("[manual delete all] error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 export default router;
