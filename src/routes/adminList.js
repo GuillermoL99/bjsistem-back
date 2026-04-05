@@ -44,24 +44,29 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PUT /admin/list/date — establecer fecha del evento de la lista
-router.put("/date", requireRole("SUPER_ADMIN"), async (req, res) => {
+
+// POST /admin/list — crear lista (setea fecha)
+router.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
   try {
     const { eventDate } = req.body || {};
+    if (!eventDate) return res.status(400).json({ error: "missing_eventDate" });
     const s = await getSettings();
-    s.eventDate = eventDate || null;
+    s.eventDate = eventDate;
     await s.save();
     res.json({ ok: true, eventDate: s.eventDate });
   } catch (e) {
-    console.error("[adminList] set date error:", e);
+    console.error("[adminList] create list error:", e);
     res.status(500).json({ error: "server_error" });
   }
 });
 
-// DELETE /admin/list/all — borrar toda la lista free
+// DELETE /admin/list/all — eliminar lista (borra fecha y personas)
 router.delete("/all", requireRole("SUPER_ADMIN"), async (req, res) => {
   try {
-    const result = await Order.deleteMany({ status: "manual", ticketId: null });
+    const [result] = await Promise.all([
+      Order.deleteMany({ status: "manual", ticketId: null }),
+      ListSettings.updateOne({ key: "free_list" }, { $set: { eventDate: null } })
+    ]);
     res.json({ ok: true, deleted: result.deletedCount });
   } catch (e) {
     console.error("[adminList] delete all error:", e);
