@@ -1,5 +1,6 @@
 import express from "express";
 import Order from "../models/Orders.js";
+import TicketType from "../models/TicketType.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -45,6 +46,34 @@ router.post("/scan", requireAuth(), async (req, res) => {
         code: "already_used",
         scannedAt: order.scannedAt,
       });
+    }
+
+    // Validar fecha del evento
+    if (order.ticketId) {
+      const ticket = await TicketType.findById(order.ticketId).lean();
+      if (ticket?.eventDate) {
+        const now = new Date();
+        const event = new Date(ticket.eventDate);
+        // Fecha del evento: año-mes-día
+        const eventY = event.getFullYear(), eventM = event.getMonth(), eventD = event.getDate();
+        const nowY = now.getFullYear(), nowM = now.getMonth(), nowD = now.getDate();
+        const sameDay = nowY === eventY && nowM === eventM && nowD === eventD;
+
+        // Madrugada: si son las 00:00–07:59, también vale el evento de ayer
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yestY = yesterday.getFullYear(), yestM = yesterday.getMonth(), yestD = yesterday.getDate();
+        const earlyMorning = now.getHours() < 8 && yestY === eventY && yestM === eventM && yestD === eventD;
+
+        if (!sameDay && !earlyMorning) {
+          return res.status(400).json({
+            ok: false,
+            code: "wrong_date",
+            eventDate: ticket.eventDate,
+            ticketName: ticket.name,
+          });
+        }
+      }
     }
 
     order.scanned = true;
