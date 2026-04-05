@@ -12,10 +12,8 @@ router.get("/", async (req, res) => {
     const visible = items.filter((t) => {
       if (!t.eventDate) return true;
       const event = new Date(t.eventDate);
-      // Permitir hasta las 8 AM del día siguiente al evento
-      const cutoff = new Date(event);
-      cutoff.setDate(cutoff.getDate() + 1);
-      cutoff.setHours(8, 0, 0, 0);
+      // Construir cutoff: día del evento (UTC) + 1, a las 8 AM hora local
+      const cutoff = new Date(event.getUTCFullYear(), event.getUTCMonth(), event.getUTCDate() + 1, 8, 0, 0, 0);
       return now < cutoff;
     });
 

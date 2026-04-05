@@ -185,9 +185,7 @@ app.post("/checkout", checkoutLimiter, async (req, res) => {
     if (ticket.eventDate) {
       const now = new Date();
       const event = new Date(ticket.eventDate);
-      const cutoff = new Date(event);
-      cutoff.setDate(cutoff.getDate() + 1);
-      cutoff.setHours(8, 0, 0, 0);
+      const cutoff = new Date(event.getUTCFullYear(), event.getUTCMonth(), event.getUTCDate() + 1, 8, 0, 0, 0);
       if (now >= cutoff) {
         return res.status(400).json({ error: "event_expired" });
       }

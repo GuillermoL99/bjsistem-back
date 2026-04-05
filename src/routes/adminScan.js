@@ -54,8 +54,9 @@ router.post("/scan", requireAuth(), async (req, res) => {
       if (ticket?.eventDate) {
         const now = new Date();
         const event = new Date(ticket.eventDate);
-        // Fecha del evento: año-mes-día
-        const eventY = event.getFullYear(), eventM = event.getMonth(), eventD = event.getDate();
+        // Usar UTC para la fecha del evento (se guarda como medianoche UTC)
+        const eventY = event.getUTCFullYear(), eventM = event.getUTCMonth(), eventD = event.getUTCDate();
+        // Usar hora local del servidor para "hoy"
         const nowY = now.getFullYear(), nowM = now.getMonth(), nowD = now.getDate();
         const sameDay = nowY === eventY && nowM === eventM && nowD === eventD;
 
