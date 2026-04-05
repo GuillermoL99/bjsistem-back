@@ -12,16 +12,15 @@ import authRoutes from "./src/routes/auth.js";
 import adminUsersRoutes from "./src/routes/adminUsers.js";
 import adminTicketsRoutes from "./src/routes/adminTickets.js";
 import publicTicketsRoutes from "./src/routes/publicTickets.js";
-import { sendTicketQR } from "./src/utils/sendTicketQR.js";
-
-import User from "./src/models/User.js";
-import Order from "./src/models/Orders.js";
-import TicketType from "./src/models/TicketType.js";
 import adminOrders from "./src/routes/adminOrders.js";
 import adminScan from "./src/routes/adminScan.js";
 import adminMetrics from "./src/routes/adminMetrics.js";
 import adminList from "./src/routes/adminList.js";
+import adminGuestList from "./src/routes/adminGuestList.js";
 
+import User from "./src/models/User.js";
+import Order from "./src/models/Orders.js";
+import TicketType from "./src/models/TicketType.js";
 import QRCode from "qrcode";
 
 const app = express();
@@ -79,6 +78,8 @@ app.use("/admin", adminOrders);
 app.use("/admin", adminScan);
 app.use("/admin", adminMetrics);
 app.use("/admin/list", adminList);
+app.use("/admin/guest-list", adminGuestList);
+app.use("/admin/guest-lists", adminGuestList);
 
 // Endpoint público: genera y sirve el QR como imagen PNG
 app.get("/qr/:orderId", async (req, res) => {
